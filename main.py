@@ -162,6 +162,72 @@ def _clean_data(art: PipelineArtifacts) -> pd.DataFrame:
     return df
 
 
+def evaluate_dataset_statistics(df: pd.DataFrame, art: PipelineArtifacts):
+    """
+    Evaluate basic statistical characteristics of the cleaned dataset using descriptive statistics
+    and simple distribution checks. Saves a JSON report and a few diagnostic plots.
+
+    Returns a dictionary of summary statistics.
+    """
+    stats: Dict[str, Any] = {}
+
+    # Overall info
+    stats["n_rows"] = int(len(df))
+    stats["n_columns"] = int(df.shape[1])
+
+    # Column-wise missingness
+    missing = df.isna().sum().sort_values(ascending=False)
+    stats["missing_counts"] = {k: int(v) for k, v in missing.to_dict().items()}
+    stats["missing_pct"] = {k: (int(v) / max(1, len(df))) * 100 for k, v in missing.to_dict().items()}
+
+    # Numeric summary (mean, std, min, max, quartiles, skew, kurtosis)
+    num_df = df.select_dtypes(include=[np.number])
+    if not num_df.empty:
+        desc = num_df.describe(percentiles=[0.25, 0.5, 0.75]).T
+        desc["skew"] = num_df.skew(numeric_only=True)
+        try:
+            # pandas >= 2.5: kurtosis is named kurt; for older versions, .kurt() works too
+            desc["kurtosis"] = num_df.kurt(numeric_only=True)
+        except TypeError:
+            desc["kurtosis"] = num_df.kurt()
+        stats["numeric_summary"] = desc.round(4).to_dict(orient="index")
+
+        # Identify potential outliers via IQR rule
+        outlier_cols: Dict[str, int] = {}
+        for col in num_df.columns:
+            s = num_df[col].dropna()
+            if s.empty:
+                continue
+            q1, q3 = s.quantile(0.25), s.quantile(0.75)
+            iqr = q3 - q1
+            lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+            outlier_count = int(((s < lower) | (s > upper)).sum())
+            outlier_cols[col] = outlier_count
+        stats["iqr_outlier_counts"] = outlier_cols
+
+        # Visuals: histograms for a few key fields if present
+        key_plots = [c for c in ["life_expectancy", "gdp", "bmi", "alcohol"] if c in num_df.columns]
+        for col in key_plots:
+            plt.figure(figsize=(6, 4))
+            sns.histplot(num_df[col].dropna(), kde=True, bins=30)
+            plt.title(f"Distribution of {col}")
+            plt.tight_layout()
+            plt.savefig(art.figures_dir / f"II_hist_{col}.png", dpi=150)
+            plt.close()
+
+    # Categorical summary for a few known categoricals
+    cat_cols = [c for c in ["country", "status", "year"] if c in df.columns]
+    cat_info: Dict[str, Any] = {}
+    for c in cat_cols:
+        vals = df[c]
+        cat_info[c] = {
+            "n_unique": int(vals.nunique(dropna=True)),
+            "top_values": vals.value_counts(dropna=True).head(10).to_dict(),
+        }
+    stats["categorical_summary"] = cat_info
+    _save_json(stats, art.reports_dir / "II_dataset_eval_stats.json")
+
+
 # -------------------- Analysis sections (III.1 - III.4) --------------------
 
 def analyze_gdp_life_corr(df: pd.DataFrame, art: PipelineArtifacts) -> pd.DataFrame:
@@ -335,7 +401,8 @@ def analyze_low_life_factors(df: pd.DataFrame, art: PipelineArtifacts) -> pd.Dat
             # Plot heatmap
             n = len(corr_mat.columns)
             plt.figure(figsize=(max(6, 0.6 * n), max(5, 0.6 * n)))
-            sns.heatmap(corr_mat, annot=True, fmt=".2f", cmap="vlag", center=0, linewidths=0.5, cbar_kws={"shrink": 0.8})
+            sns.heatmap(corr_mat, annot=True, fmt=".2f", cmap="vlag", center=0, linewidths=0.5,
+                        cbar_kws={"shrink": 0.8})
             plt.title("Correlation matrix - potential features (low-life countries)")
             plt.tight_layout()
             plt.savefig(art.figures_dir / "III3_low_life_corr_matrix.png", dpi=150)
@@ -498,6 +565,9 @@ if __name__ == "__main__":
 
     print("Loading and cleaning data...")
     df = _clean_data(art)
+
+    print("Evaluating dataset statistics after cleaning")
+    evaluate_dataset_statistics(df, art)
 
     print("III.1 - GDP vs Life Expectancy correlation analysis")
     corr_by_country = analyze_gdp_life_corr(df, art)
