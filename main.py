@@ -320,6 +320,27 @@ def analyze_low_life_factors(df: pd.DataFrame, art: PipelineArtifacts) -> pd.Dat
         plt.savefig(art.figures_dir / "III3_low_life_factors.png", dpi=150)
         plt.close()
 
+    # Correlation matrix heatmap for potential features (low-life countries)
+    feature_for_corr = features.copy()
+    if "life_expectancy" in df_low.columns and "life_expectancy" not in feature_for_corr:
+        feature_for_corr.append("life_expectancy")
+    # Keep only numeric columns present
+    feature_for_corr = [c for c in feature_for_corr if c in df_low.columns]
+    if feature_for_corr:
+        corr_mat = df_low[feature_for_corr].corr(method="pearson", numeric_only=True)
+        # Drop rows/cols that are entirely NaN (if any)
+        if corr_mat.notna().any().any():
+            # Save CSV of correlation matrix as well
+            corr_mat.to_csv(art.reports_dir / "III3_low_life_corr_matrix.csv")
+            # Plot heatmap
+            n = len(corr_mat.columns)
+            plt.figure(figsize=(max(6, 0.6 * n), max(5, 0.6 * n)))
+            sns.heatmap(corr_mat, annot=True, fmt=".2f", cmap="vlag", center=0, linewidths=0.5, cbar_kws={"shrink": 0.8})
+            plt.title("Correlation matrix - potential features (low-life countries)")
+            plt.tight_layout()
+            plt.savefig(art.figures_dir / "III3_low_life_corr_matrix.png", dpi=150)
+            plt.close()
+
     # Additional: compare mean feature values between low and high groups
     comp = _potential_issues_low_life(df)
     comp.to_csv(art.reports_dir / "III3_low_vs_high_feature_means.csv", index=False)
