@@ -39,6 +39,9 @@ from sklearn.model_selection import train_test_split, cross_val_score, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+# Import analysis modules
+from analyze_part1 import analyze_gdp_life_corr
+
 # -------------------- Configuration & Artifacts --------------------
 OUTPUT_DIR = Path("output")
 DATA_PATH = Path("data/Life Expectancy Data.csv")
@@ -408,65 +411,7 @@ def evaluate_dataset_visualization(df: pd.DataFrame, art: PipelineArtifacts):
 
 # -------------------- Analysis sections (III.1 - III.4) --------------------
 
-def analyze_gdp_life_corr(df: pd.DataFrame, art: PipelineArtifacts) -> pd.DataFrame:
-    """III.1 Correlation between GDP and life expectancy (global & per-country)
-    Returns per-country correlation table and saves figures/reports.
-    """
-    results = []
-    if not {"country", "gdp", "life_expectancy"}.issubset(df.columns):
-        return pd.DataFrame(results)
-
-    # Global Pearson & Spearman (use log gdp for stability)
-    df_valid = df.replace({"gdp": {0: np.nan}}).dropna(subset=["gdp", "life_expectancy"])
-    log_gdp = np.log10(df_valid["gdp"]).replace([-np.inf, np.inf], np.nan).dropna()
-    common_idx = log_gdp.index.intersection(df_valid.index)
-    global_pearson = pearsonr(log_gdp.loc[common_idx], df_valid.loc[common_idx, "life_expectancy"])
-    global_spearman = spearmanr(df_valid.loc[common_idx, "gdp"], df_valid.loc[common_idx, "life_expectancy"],
-                                nan_policy='omit')
-
-    # Per-country correlations
-    for country, g in df.groupby("country"):
-        g = g.dropna(subset=["gdp", "life_expectancy"])
-        if len(g) >= 3:
-            x = np.log10(g["gdp"].replace(0, np.nan)).replace([-np.inf, np.inf], np.nan).dropna()
-            y = g.loc[x.index, "life_expectancy"]
-            if len(x) >= 3:
-                try:
-                    r_p, p_p = pearsonr(x, y)
-                    r_s, p_s = spearmanr(g.loc[x.index, "gdp"], y, nan_policy='omit')
-                except Exception:
-                    r_p, p_p, r_s, p_s = np.nan, np.nan, np.nan, np.nan
-                results.append({
-                    "country": country,
-                    "n": int(len(g)),
-                    "pearson_r_log10gdp_life": float(r_p) if pd.notna(r_p) else None,
-                    "pearson_pvalue": float(p_p) if pd.notna(p_p) else None,
-                    "spearman_r_gdp_life": float(r_s) if pd.notna(r_s) else None,
-                    "spearman_pvalue": float(p_s) if pd.notna(p_s) else None,
-                })
-
-    corr_df = pd.DataFrame(results)
-    corr_df.to_csv(art.reports_dir / "III1_corr_by_country.csv", index=False)
-
-    # Global summary
-    global_summary = {
-        "global_pearson_log10gdp_life": float(global_pearson[0]),
-        "global_pearson_pvalue": float(global_pearson[1]),
-        "global_spearman_gdp_life": float(global_spearman.correlation),
-        "global_spearman_pvalue": float(global_spearman.pvalue),
-    }
-    _save_json(global_summary, art.reports_dir / "III1_global_corr_summary.json")
-
-    # Visual: scatter (log gdp vs life expectancy)
-    plt.figure(figsize=(7, 5))
-    sns.scatterplot(data=df_valid, x=np.log10(df_valid["gdp"]), y="life_expectancy", hue=df_valid.get("status"))
-    plt.xlabel("log10(GDP)")
-    plt.title("Global: log10(GDP) vs Life Expectancy")
-    plt.tight_layout()
-    plt.savefig(art.figures_dir / "III1_scatter_loggdp_life.png", dpi=150)
-    plt.close()
-
-    return corr_df
+# analyze_gdp_life_corr function moved to analyze_muc1.py
 
 
 def analyze_top_bottom(df: pd.DataFrame, art: PipelineArtifacts, top_n: int = 10) -> Tuple[pd.DataFrame, pd.DataFrame]:
