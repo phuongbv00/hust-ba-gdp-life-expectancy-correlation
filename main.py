@@ -509,6 +509,22 @@ def analyze_top_bottom(df: pd.DataFrame, art: PipelineArtifacts, top_n: int = 10
             plt.savefig(art.figures_dir / f"III2_scatter_gdp_life_{name}.png", dpi=150)
             plt.close()
 
+        # GDP trend over years for the same set of countries
+        if not subdf.empty and set(["year", "gdp"]).issubset(subdf.columns):
+            # aggregate by country-year in case of duplicates
+            trend_df = (subdf.groupby(["country", "year"], as_index=False)
+                              .agg(mean_gdp=("gdp", "mean")))
+            trend_df = trend_df.sort_values(["country", "year"])  # ensure order
+            if not trend_df.empty:
+                plt.figure(figsize=(9, 5))
+                sns.lineplot(data=trend_df, x="year", y="mean_gdp", hue="country", marker="o")
+                plt.xlabel("Year")
+                plt.ylabel("GDP (mean)")
+                plt.title(f"Xu hướng GDP theo thời gian - Nhóm {name} 10 quốc gia")
+                plt.tight_layout()
+                plt.savefig(art.figures_dir / f"III2_trend_gdp_{name}.png", dpi=150)
+                plt.close()
+
     return top, bottom
 
 
