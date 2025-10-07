@@ -432,19 +432,68 @@ def analyze_top_bottom(df: pd.DataFrame, art: PipelineArtifacts, top_n: int = 10
 
     # Visuals
     if not top.empty:
+        # Barplot with life expectancy labels
         plt.figure(figsize=(8, 4))
-        sns.barplot(data=top.sort_values("avg_life_expectancy"), x="avg_life_expectancy", y="country")
+        top_sorted = top.sort_values("avg_life_expectancy", ascending=False)
+        ax = sns.barplot(data=top_sorted, x="avg_life_expectancy", y="country")
+        # Annotate each bar with the life expectancy value
+        for cont, val in zip(top_sorted["country"], top_sorted["avg_life_expectancy"]):
+            y = np.where(top_sorted["country"] == cont)[0][0]
+            ax.text(val, y, f" {val:.1f}", va="center", ha="left", fontsize=9)
+        ax.set_xlabel("Average life expectancy")
         plt.title(f"Top {top_n} Countries by Average Life Expectancy")
         plt.tight_layout()
         plt.savefig(art.figures_dir / "III2_top_countries.png", dpi=150)
         plt.close()
 
+        # Table image for top countries (country, avg_life_expectancy, avg_gdp)
+        fig, ax_tbl = plt.subplots(figsize=(8, max(2.5, 0.35 * len(top_sorted) + 1)))
+        ax_tbl.axis('off')
+        tbl_df = top_sorted[["country", "avg_life_expectancy", "avg_gdp"]].copy()
+        tbl_df["avg_life_expectancy"] = tbl_df["avg_life_expectancy"].round(2)
+        if "avg_gdp" in tbl_df.columns:
+            tbl_df["avg_gdp"] = tbl_df["avg_gdp"].round(0).astype("Int64").astype(str)
+        table = ax_tbl.table(cellText=tbl_df.values,
+                             colLabels=["Country", "Avg life exp.", "Avg GDP"],
+                             loc='center')
+        table.auto_set_font_size(False)
+        table.set_fontsize(9)
+        table.scale(1, 1.2)
+        ax_tbl.set_title(f"Top {top_n} Countries: Life Expectancy & GDP")
+        plt.tight_layout()
+        plt.savefig(art.figures_dir / "III2_top_countries_table.png", dpi=150)
+        plt.close()
+
     if not bottom.empty:
+        # Barplot with life expectancy labels
         plt.figure(figsize=(8, 4))
-        sns.barplot(data=bottom.sort_values("avg_life_expectancy"), x="avg_life_expectancy", y="country")
+        bottom_sorted = bottom.sort_values("avg_life_expectancy")
+        ax = sns.barplot(data=bottom_sorted, x="avg_life_expectancy", y="country")
+        for cont, val in zip(bottom_sorted["country"], bottom_sorted["avg_life_expectancy"]):
+            y = np.where(bottom_sorted["country"] == cont)[0][0]
+            ax.text(val, y, f" {val:.1f}", va="center", ha="left", fontsize=9)
+        ax.set_xlabel("Average life expectancy")
         plt.title(f"Bottom {top_n} Countries by Average Life Expectancy")
         plt.tight_layout()
         plt.savefig(art.figures_dir / "III2_bottom_countries.png", dpi=150)
+        plt.close()
+
+        # Table image for bottom countries
+        fig, ax_tbl = plt.subplots(figsize=(8, max(2.5, 0.35 * len(bottom_sorted) + 1)))
+        ax_tbl.axis('off')
+        tbl_df = bottom_sorted[["country", "avg_life_expectancy", "avg_gdp"]].copy()
+        tbl_df["avg_life_expectancy"] = tbl_df["avg_life_expectancy"].round(2)
+        if "avg_gdp" in tbl_df.columns:
+            tbl_df["avg_gdp"] = tbl_df["avg_gdp"].round(0).astype("Int64").astype(str)
+        table = ax_tbl.table(cellText=tbl_df.values,
+                             colLabels=["Country", "Avg life exp.", "Avg GDP"],
+                             loc='center')
+        table.auto_set_font_size(False)
+        table.set_fontsize(9)
+        table.scale(1, 1.2)
+        ax_tbl.set_title(f"Bottom {top_n} Countries: Life Expectancy & GDP")
+        plt.tight_layout()
+        plt.savefig(art.figures_dir / "III2_bottom_countries_table.png", dpi=150)
         plt.close()
 
     # Scatter GDP vs life for top/bottom
