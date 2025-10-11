@@ -224,6 +224,18 @@ def evaluate_dataset_statistics(df: pd.DataFrame, art: PipelineArtifacts):
             plt.savefig(art.figures_dir / f"II_hist_{col}.png", dpi=150)
             plt.close()
 
+            # Additionally, save log10(GDP) histogram if plotting GDP
+            if col == "gdp":
+                s = pd.to_numeric(num_df[col], errors="coerce").dropna()
+                s = s[s > 0]
+                if not s.empty:
+                    plt.figure(figsize=(6, 4))
+                    sns.histplot(np.log10(s), kde=True, bins=30)
+                    plt.title("Distribution of log10(gdp)")
+                    plt.tight_layout()
+                    plt.savefig(art.figures_dir / "II_hist_log_10_gdp.png", dpi=150)
+                    plt.close()
+
     # Categorical summary for a few known categoricals
     cat_cols = [c for c in ["country", "status", "year"] if c in df.columns]
     cat_info: Dict[str, Any] = {}
@@ -281,7 +293,7 @@ def evaluate_dataset_statistics(df: pd.DataFrame, art: PipelineArtifacts):
 
         # 3) Numeric summary table (all)
         if desc is not None and not desc.empty:
-            sel_cols = ["mean", "std", "min", "25%", "50%", "75%", "max", "skew", "kurtosis"]
+            sel_cols = ["count", "mean", "std", "min", "25%", "50%", "75%", "max", "skew"]
             present_cols = [c for c in sel_cols if c in desc.columns]
             num_table = desc[present_cols].round(3).copy()
             try:
@@ -303,6 +315,63 @@ def evaluate_dataset_statistics(df: pd.DataFrame, art: PipelineArtifacts):
             plt.tight_layout()
             plt.savefig(art.figures_dir / "II_dataset_eval_numeric_summary_table.png", dpi=150)
             plt.close()
+
+            # 3b) Numeric summary table (gdp, log10(gdp), life_expectancy)
+            try:
+                present_cols = [c for c in ["count", "mean", "std", "min", "25%", "50%", "75%", "max", "skew"] if c in desc.columns]
+                rows = []
+                index_names = []
+
+                # gdp
+                if "gdp" in desc.index:
+                    rows.append(desc.loc["gdp", present_cols])
+                    index_names.append("gdp")
+
+                # log10(gdp)
+                if "gdp" in num_df.columns:
+                    s = pd.to_numeric(num_df["gdp"], errors="coerce").dropna()
+                    s = s[s > 0]
+                    if not s.empty:
+                        log_s = np.log10(s)
+                        log_desc = log_s.describe(percentiles=[0.25, 0.5, 0.75])
+                        log_skew = log_s.skew()
+                        # Build a row aligned with present_cols
+                        log_row = {k: None for k in present_cols}
+                        for k in ["count", "mean", "std", "min", "25%", "50%", "75%", "max"]:
+                            if k in present_cols and k in log_desc:
+                                log_row[k] = float(log_desc[k])
+                        if "skew" in present_cols:
+                            log_row["skew"] = float(log_skew)
+                        rows.append(pd.Series(log_row))
+                        index_names.append("log10(gdp)")
+
+                # life_expectancy
+                if "life_expectancy" in desc.index:
+                    rows.append(desc.loc["life_expectancy", present_cols])
+                    index_names.append("life_expectancy")
+
+                if rows:
+                    sub_tbl = pd.DataFrame(rows)
+                    sub_tbl.index = index_names
+                    sub_tbl = sub_tbl.round(3)
+                    # Insert feature column and reset index
+                    sub_tbl.insert(0, "feature", sub_tbl.index)
+                    sub_tbl = sub_tbl.reset_index(drop=True)
+
+                    fig_h = 2 + 0.18 * max(3, len(sub_tbl))
+                    plt.figure(figsize=(10, fig_h))
+                    ax = plt.gca()
+                    ax.axis('off')
+                    ax.set_title("Numeric Summary (gdp, log10(gdp), life_expectancy)", fontweight='bold', pad=10)
+                    tbl = ax.table(cellText=sub_tbl.values, colLabels=sub_tbl.columns, loc='center')
+                    tbl.auto_set_font_size(False)
+                    tbl.set_fontsize(8)
+                    tbl.scale(1, 1.1)
+                    plt.tight_layout()
+                    plt.savefig(art.figures_dir / "II_dataset_eval_numeric_summary_table_gdp_life.png", dpi=150)
+                    plt.close()
+            except Exception:
+                pass
 
     except Exception:
         # Fail-safe: don't block pipeline if table rendering fails
