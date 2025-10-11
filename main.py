@@ -432,16 +432,39 @@ def analyze_top_bottom(df: pd.DataFrame, art: PipelineArtifacts, top_n: int = 10
 
     # Visuals
     if not top.empty:
-        # Barplot with life expectancy labels
-        plt.figure(figsize=(8, 4))
+        # Dual-axis barplot: life expectancy (primary X) and GDP (secondary X) per country
         top_sorted = top.sort_values("avg_life_expectancy", ascending=False)
-        ax = sns.barplot(data=top_sorted, x="avg_life_expectancy", y="country")
-        # Annotate each bar with the life expectancy value
-        for cont, val in zip(top_sorted["country"], top_sorted["avg_life_expectancy"]):
-            y = np.where(top_sorted["country"] == cont)[0][0]
-            ax.text(val, y, f" {val:.1f}", va="center", ha="left", fontsize=9)
-        ax.set_xlabel("Average life expectancy")
-        plt.title(f"Top {top_n} Countries by Average Life Expectancy")
+        countries = top_sorted["country"].tolist()
+        y_pos = np.arange(len(countries))
+        height = max(4, 0.4 * len(top_sorted))
+        fig, ax1 = plt.subplots(figsize=(12, height))
+        # Life expectancy bars (horizontal)
+        ax1.barh(y_pos - 0.2, top_sorted["avg_life_expectancy"], height=0.4, color="#4C72B0", label="Tuổi thọ TB")
+        for yi, val in zip(y_pos, top_sorted["avg_life_expectancy"]):
+            ax1.text(val, yi - 0.2, f" {val:.1f}", va="center", ha="left", fontsize=9, color="#2F4B7C")
+        ax1.set_xlabel("Tuổi thọ trung bình")
+        ax1.set_yticks(y_pos)
+        ax1.set_yticklabels(countries)
+        ax1.invert_yaxis()
+        # GDP bars on twin x-axis
+        if "avg_gdp" in top_sorted.columns:
+            ax2 = ax1.twiny()
+            ax2.barh(y_pos + 0.2, top_sorted["avg_gdp"], height=0.4, color="#DD8452", alpha=0.7, label="GDP bình quân")
+            # Annotate GDP values on GDP bars
+            try:
+                for yi, val in zip(y_pos, top_sorted["avg_gdp"]):
+                    if pd.notna(val):
+                        ax2.text(val, yi + 0.2, f" {val:,.0f}", va="center", ha="left", fontsize=8, color="#8B4513")
+            except Exception:
+                pass
+            ax2.set_xlabel("GDP bình quân đầu người")
+            # Create a combined legend
+            lines = [plt.Rectangle((0,0),1,1, color="#4C72B0"), plt.Rectangle((0,0),1,1, color="#DD8452", alpha=0.7)]
+            labels = ["Tuổi thọ TB", "GDP bình quân"]
+            ax1.legend(lines, labels, title="Chỉ số", loc="lower right")
+        else:
+            ax1.legend(title="Chỉ số", loc="lower right")
+        plt.title(f"Top {top_n} quốc gia: Tuổi thọ TB và GDP bình quân (2 trục)")
         plt.tight_layout()
         plt.savefig(art.figures_dir / "III2_top_countries.png", dpi=150)
         plt.close()
@@ -465,15 +488,36 @@ def analyze_top_bottom(df: pd.DataFrame, art: PipelineArtifacts, top_n: int = 10
         plt.close()
 
     if not bottom.empty:
-        # Barplot with life expectancy labels
-        plt.figure(figsize=(8, 4))
+        # Dual-axis barplot for bottom group
         bottom_sorted = bottom.sort_values("avg_life_expectancy")
-        ax = sns.barplot(data=bottom_sorted, x="avg_life_expectancy", y="country")
-        for cont, val in zip(bottom_sorted["country"], bottom_sorted["avg_life_expectancy"]):
-            y = np.where(bottom_sorted["country"] == cont)[0][0]
-            ax.text(val, y, f" {val:.1f}", va="center", ha="left", fontsize=9)
-        ax.set_xlabel("Average life expectancy")
-        plt.title(f"Bottom {top_n} Countries by Average Life Expectancy")
+        countries_b = bottom_sorted["country"].tolist()
+        y_pos = np.arange(len(countries_b))
+        height = max(4, 0.4 * len(bottom_sorted))
+        fig, ax1 = plt.subplots(figsize=(12, height))
+        ax1.barh(y_pos - 0.2, bottom_sorted["avg_life_expectancy"], height=0.4, color="#4C72B0", label="Tuổi thọ TB")
+        for yi, val in zip(y_pos, bottom_sorted["avg_life_expectancy"]):
+            ax1.text(val, yi - 0.2, f" {val:.1f}", va="center", ha="left", fontsize=9, color="#2F4B7C")
+        ax1.set_xlabel("Tuổi thọ trung bình")
+        ax1.set_yticks(y_pos)
+        ax1.set_yticklabels(countries_b)
+        ax1.invert_yaxis()
+        if "avg_gdp" in bottom_sorted.columns:
+            ax2 = ax1.twiny()
+            ax2.barh(y_pos + 0.2, bottom_sorted["avg_gdp"], height=0.4, color="#DD8452", alpha=0.7, label="GDP bình quân")
+            # Annotate GDP values on GDP bars
+            try:
+                for yi, val in zip(y_pos, bottom_sorted["avg_gdp"]):
+                    if pd.notna(val):
+                        ax2.text(val, yi + 0.2, f" {val:,.0f}", va="center", ha="left", fontsize=8, color="#8B4513")
+            except Exception:
+                pass
+            ax2.set_xlabel("GDP bình quân đầu người")
+            lines = [plt.Rectangle((0,0),1,1, color="#4C72B0"), plt.Rectangle((0,0),1,1, color="#DD8452", alpha=0.7)]
+            labels = ["Tuổi thọ TB", "GDP bình quân"]
+            ax1.legend(lines, labels, title="Chỉ số", loc="lower right")
+        else:
+            ax1.legend(title="Chỉ số", loc="lower right")
+        plt.title(f"Bottom {top_n} quốc gia: Tuổi thọ TB và GDP bình quân (2 trục)")
         plt.tight_layout()
         plt.savefig(art.figures_dir / "III2_bottom_countries.png", dpi=150)
         plt.close()
@@ -501,10 +545,27 @@ def analyze_top_bottom(df: pd.DataFrame, art: PipelineArtifacts, top_n: int = 10
         countries = subset["country"].tolist()
         subdf = df[df["country"].isin(countries)]
         if not subdf.empty and "gdp" in subdf.columns:
-            plt.figure(figsize=(8, 5))
-            sns.scatterplot(data=subdf, x="gdp", y="life_expectancy", hue="country")
+            # Compute correlation (Pearson and Spearman) on available pairs
+            corr_info = ""
+            try:
+                pairs = subdf[["gdp", "life_expectancy"]].dropna()
+                if len(pairs) >= 3:
+                    r_p, p_p = pearsonr(pairs["gdp"], pairs["life_expectancy"])  # type: ignore[arg-type]
+                    r_s, p_s = spearmanr(pairs["gdp"], pairs["life_expectancy"])  # type: ignore[arg-type]
+                    corr_info = f"\nr(Pearson)={r_p:.2f} (p={p_p:.3g}), rho(Spearman)={r_s:.2f} (p={p_s:.3g})"
+            except Exception:
+                pass
+
+            plt.figure(figsize=(9, 5))
+            # Scatter by country with low alpha and small markers
+            sns.scatterplot(data=subdf, x="gdp", y="life_expectancy", hue="country", alpha=0.7, s=40)
+            # Add a global trend line (on raw GDP). For log relation, we keep x log-scale for visual linearity
+            # Use regplot without hue to draw a single trend line over all points
+            sns.regplot(data=subdf, x="gdp", y="life_expectancy", scatter=False, color="black", line_kws={"lw": 1.5, "alpha": 0.8})
             plt.xscale("log")
-            plt.title(f"GDP vs Life Expectancy: {name} countries")
+            plt.xlabel("GDP (log scale)")
+            plt.ylabel("Life Expectancy")
+            plt.title(f"Tương quan GDP và Tuổi thọ: nhóm {name}{corr_info}")
             plt.tight_layout()
             plt.savefig(art.figures_dir / f"III2_scatter_gdp_life_{name}.png", dpi=150)
             plt.close()
